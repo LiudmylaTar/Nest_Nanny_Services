@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { Types } from 'mongoose';
 import { MailService } from 'src/mail/mail.service';
 import { UsersService } from 'src/users/users.service';
+import { RefreshTokensService } from './refresh-tokens.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -19,6 +20,7 @@ import {
   hashPasswordResetToken,
   PASSWORD_RESET_TTL_MS,
 } from './utils/password-reset.util';
+import { hashRefreshToken } from './utils/refresh-token.util';
 
 type UserResponse = {
   _id: Types.ObjectId;
@@ -41,6 +43,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
+    private readonly refreshTokensService: RefreshTokensService,
   ) {}
 
   private normalizeEmail(email: string) {
@@ -63,17 +66,32 @@ export class AuthService {
     return this.jwtService.signAsync(payload);
   }
 
+  private async issueAuthResponse(user: UserResponse) {
+    const accessToken = await this.signAccessToken(user);
+    const refreshToken = await this.refreshTokensService.create(user._id);
+
+    return this.buildTokenPair(user, refreshToken, accessToken);
+  }
+
+  private async buildTokenPair(
+    user: UserResponse,
+    refreshToken: string,
+    accessToken?: string,
+  ) {
+    return {
+      accessToken: accessToken ?? (await this.signAccessToken(user)),
+      refreshToken,
+      user: this.buildUserResponse(user),
+    };
+  }
+
   async register(dto: RegisterDto) {
     const user = await this.usersService.create({
       name: dto.name.trim(),
       email: this.normalizeEmail(dto.email),
       password: dto.password,
     });
-    const accessToken = await this.signAccessToken(user);
-    return {
-      accessToken,
-      user: this.buildUserResponse(user),
-    };
+    return this.issueAuthResponse(user);
   }
 
   getMe(user: AuthUser) {
@@ -97,11 +115,7 @@ export class AuthService {
     if (!ok) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const accessToken = await this.signAccessToken(user);
-    return {
-      accessToken,
-      user: this.buildUserResponse(user),
-    };
+    return this.issueAuthResponse(user);
   }
 
   async forgotPassword(email: string) {
@@ -151,6 +165,26 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired token');
     }
 
+    await this.refreshTokensService.revokeAllForUser(user._id);
+
     return RESET_PASSWORD_SUCCESS_RESPONSE;
+  }
+
+  async refresh(refreshToken: string) {
+    const { userId, refreshToken: newRefreshToken } =
+      await this.refreshTokensService.rotate(refreshToken);
+
+    const user = await this.usersService.findById(userId.toString());
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return this.buildTokenPair(user, newRefreshToken);
+  }
+
+  async logout(refreshToken: string) {
+    await this.refreshTokensService.revoke(hashRefreshToken(refreshToken));
+
+    return { message: 'Logged out successfully' };
   }
 }
