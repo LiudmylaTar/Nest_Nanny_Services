@@ -1,18 +1,18 @@
 # Nest Nanny Services
 
-NestJS API для сервісу нянь: автентифікація (access + refresh tokens), користувачі, пошта.
+NestJS API for a nanny booking service: authentication (access + refresh tokens), users, nannies, favorites, and email.
 
-## Швидкий старт
+## Quick start
 
-### 1. Встановити залежності
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Налаштувати `.env`
+### 2. Configure `.env`
 
-Створи файл `.env` у корені проєкту (приклад змінних):
+Create a `.env` file in the project root:
 
 ```env
 PORT=3000
@@ -33,40 +33,40 @@ EMAIL_FROM=
 SUPPORT_URL=
 ```
 
-### 3. Запустити сервер (режим розробки)
+### 3. Run the server (development)
 
 ```bash
 npm run start:dev
 ```
 
-Сервер буде доступний на `http://localhost:3000` (або на порту з `PORT`).
+The server runs at `http://localhost:3000` (or the port from `PORT`).
 
-**Swagger (документація для Postman):** `http://localhost:3000/api`
+**Swagger:** `http://localhost:3000/api`
 
-Після змін у коді Nest перезапускається автоматично.
+Nest reloads automatically when you change the code.
 
-### Інші команди
+### Other commands
 
 ```bash
-# звичайний запуск (без watch)
+# standard start (no watch)
 npm run start
 
-# production (спочатку npm run build)
+# production (run npm run build first)
 npm run start:prod
 
-# збірка
+# build
 npm run build
 
-# тести
+# tests
 npm run test
 npm run test:e2e
 ```
 
-## Тестування Auth API
+## Auth API examples
 
-Приклади через `curl` (підстав свій email/пароль).
+Use `curl` and replace email/password with your values.
 
-### Реєстрація
+### Register
 
 ```bash
 curl -X POST http://localhost:3000/auth/register \
@@ -74,7 +74,7 @@ curl -X POST http://localhost:3000/auth/register \
   -d '{"name":"Test User","email":"user@example.com","password":"secret123"}'
 ```
 
-### Логін
+### Login
 
 ```bash
 curl -X POST http://localhost:3000/auth/login \
@@ -82,16 +82,16 @@ curl -X POST http://localhost:3000/auth/login \
   -d '{"email":"user@example.com","password":"secret123"}'
 ```
 
-У відповіді збережи `accessToken` і `refreshToken`.
+Save `accessToken` and `refreshToken` from the response.
 
-### Поточний користувач (потрібен access)
+### Current user (requires access token)
 
 ```bash
 curl http://localhost:3000/auth/me \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-### Оновити access (коли прострочився)
+### Refresh access token
 
 ```bash
 curl -X POST http://localhost:3000/auth/refresh \
@@ -99,7 +99,7 @@ curl -X POST http://localhost:3000/auth/refresh \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
 
-### Logout (відкликає refresh у БД)
+### Logout (revokes refresh token in DB)
 
 ```bash
 curl -X POST http://localhost:3000/auth/logout \
@@ -107,14 +107,75 @@ curl -X POST http://localhost:3000/auth/logout \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
 
-## Auth ендпоінти
+## Auth endpoints
 
-| Метод | Шлях | Авторизація |
-|-------|------|-------------|
-| POST | `/auth/register` | публічний |
-| POST | `/auth/login` | публічний |
-| POST | `/auth/refresh` | публічний |
-| POST | `/auth/logout` | публічний (`refreshToken` у body) |
-| POST | `/auth/forgot-password` | публічний |
-| POST | `/auth/reset-password` | публічний |
+| Method | Path | Auth |
+|--------|------|------|
+| POST | `/auth/register` | public |
+| POST | `/auth/login` | public |
+| POST | `/auth/refresh` | public |
+| POST | `/auth/logout` | public (`refreshToken` in body) |
+| POST | `/auth/forgot-password` | public |
+| POST | `/auth/reset-password` | public |
 | GET | `/auth/me` | Bearer access token |
+
+## Nannies API examples
+
+### Public catalog (no auth)
+
+```bash
+curl "http://localhost:3000/nannies?page=1&limit=4&filter=all"
+```
+
+### Nanny details with reviews (auth required)
+
+```bash
+curl http://localhost:3000/nannies/<nannyId> \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+### Favorite nannies list (auth required)
+
+Returns `{ "data": [...] }` — same nanny shape as the public catalog.
+
+```bash
+curl http://localhost:3000/nannies/favorites \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+### Toggle favorite (auth required)
+
+Use this for the heart/star icon on the frontend. One endpoint adds or removes the nanny and returns the new state.
+
+```bash
+curl -X PATCH http://localhost:3000/nannies/<nannyId>/favorite \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+Response:
+
+```json
+{ "isFavorite": true }
+```
+
+Call the same endpoint again to remove:
+
+```json
+{ "isFavorite": false }
+```
+
+## Nannies endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/nannies` | public | Paginated nanny list (no reviews) |
+| GET | `/nannies/favorites` | Bearer token | User's favorite nannies |
+| GET | `/nannies/:id` | Bearer token | Nanny details with reviews |
+| PATCH | `/nannies/:id/favorite` | Bearer token | Toggle favorite on/off |
+
+## Frontend favorites flow
+
+1. After login, store `accessToken`.
+2. On the favorites page, load `GET /nannies/favorites` and render `response.data`.
+3. On icon click, call `PATCH /nannies/:id/favorite` and update UI from `isFavorite`.
+4. Optionally keep a `Set` of favorite IDs in state, initialized from `GET /nannies/favorites`.

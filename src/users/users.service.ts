@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserData } from './type/createUser.type';
@@ -78,5 +78,35 @@ export class UsersService {
       },
       { new: true },
     );
+  }
+
+  async getFavoriteNannies(userId: string): Promise<Types.ObjectId[]> {
+    const user = await this.userModel
+      .findById(userId)
+      .select('favoriteNannies');
+    return user?.favoriteNannies ?? [];
+  }
+
+  async isFavoriteNanny(userId: string, nannyId: string): Promise<boolean> {
+    const user = await this.userModel
+      .findById(userId)
+      .select('favoriteNannies')
+      .lean();
+
+    return (
+      user?.favoriteNannies?.some((id) => id.toString() === nannyId) ?? false
+    );
+  }
+
+  async addFavoriteNanny(userId: string, nannyId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: { favoriteNannies: new Types.ObjectId(nannyId) },
+    });
+  }
+
+  async removeFavoriteNanny(userId: string, nannyId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { favoriteNannies: new Types.ObjectId(nannyId) },
+    });
   }
 }

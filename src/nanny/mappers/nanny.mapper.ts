@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { FullNannyDto } from '../dto/full-nanny.dto';
 import { PublicNannyDto } from '../dto/public-nanny.dto';
 
 type PublicNannyLean = {
@@ -14,6 +15,14 @@ type PublicNannyLean = {
   characters?: string[];
   education: string;
   about: string;
+};
+
+type FullNannyLean = PublicNannyLean & {
+  reviews?: {
+    reviewer: string;
+    rating: number;
+    comment: string;
+  }[];
 };
 
 const toIsoBirthday = (birthday: Date | string): string => {
@@ -38,5 +47,12 @@ export const toPublicNannyDto = (doc: PublicNannyLean): PublicNannyDto => {
     characters: doc.characters ?? [],
     education: doc.education,
     about: doc.about,
+  };
+};
+
+export const toFullNannyDto = (doc: FullNannyLean): FullNannyDto => {
+  return {
+    ...toPublicNannyDto(doc),
+    reviews: doc.reviews ?? [],
   };
 };

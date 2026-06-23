@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type UserDocument = User & Document;
 @Schema({
@@ -20,6 +20,12 @@ export class User {
 
   @Prop({ select: false })
   passwordResetExpiresAt?: Date;
+
+  @Prop({
+    type:[{type: Types.ObjectId, ref: 'Nanny'}],
+    default:[],
+  })
+  favoriteNannies: Types.ObjectId[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
